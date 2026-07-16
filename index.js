@@ -1,7 +1,10 @@
 const express = require('express');
 require("dotenv").config()
+const cors = require('cors');
 const app = express();
 const port = 8000;
+app.use(cors());
+app.use(express.json());
 
 
 
@@ -28,7 +31,18 @@ async function server() {
  const petsCollection=db.collection("pets");
 
  app.get('/pets',async (req,res)=>{
-  const cursor= petsCollection.find();
+  const{search,species} = req.query;
+  let query ={};
+
+  if(search){
+    query.petName = {$regex:search, $options: "i"};
+  }
+  if(species && species !=="All"){
+    const speciesArray = species.split(",");
+    query.species={$in:speciesArray};
+  }
+
+  const cursor= petsCollection.find(query);
   const result =await cursor.toArray();
   res.send(result);
  })
