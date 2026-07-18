@@ -8,7 +8,7 @@ app.use(express.json());
 
 
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = process.env.DB_URI;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -47,7 +47,13 @@ async function server() {
   res.send(result);
  })
 
-  
+ app.get('/pets/:id',async(req,res)=>{
+  const {id}= req.params;
+  const query = {_id:id}
+  const result = await petsCollection.findOne(query)
+  res.send(result)
+
+ }) 
 
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
