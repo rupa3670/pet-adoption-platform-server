@@ -29,6 +29,7 @@ async function server() {
 
  const db= client.db("petAdoption");
  const petsCollection=db.collection("pets");
+ const adoptionsCollection = db.collection("adoptions")
 
  app.get('/pets',async (req,res)=>{
   const{search,species} = req.query;
@@ -54,6 +55,17 @@ async function server() {
   res.send(result)
 
  }) 
+
+ app.post('/adoptions', async (req,res)=>{
+  const adoptionData = req.body;
+  const newRequest = {
+    ...adoptionData,
+    status:"pending",
+    createAt:new Data()
+  };
+const result = await adoptionsCollection.insertOne(newRequest);
+res.status(201).send({success:true, insertedId: result.insertedId});
+ });
 
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
