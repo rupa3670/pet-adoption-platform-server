@@ -61,11 +61,21 @@ async function server() {
   const newRequest = {
     ...adoptionData,
     status:"pending",
-    createAt:new Data()
+    createAt:new Date()
   };
 const result = await adoptionsCollection.insertOne(newRequest);
 res.status(201).send({success:true, insertedId: result.insertedId});
  });
+
+ app.post('/pets',async(res,req)=>{
+  const petData = req.body;
+  const newPet = {
+    ...petData,
+    createdAt:new Date()
+  };
+  const result = await petsCollection.insertOne(newPet)
+  res.status(201).send({success:true, message: "Pet added successfully!", insertedId:result.insertedId});
+ })
 
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
