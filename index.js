@@ -56,6 +56,13 @@ async function server() {
 
  }) 
 
+ app.get('/pets/owner/:email', async(req,res)=>{
+  const email = req.params.email;
+  const query = {ownerEmail:email};
+  const result = await petsCollection.find(query).toArray();
+  res.send(result)
+ })
+
  app.post('/adoptions', async (req,res)=>{
   const adoptionData = req.body;
   const newRequest = {
@@ -67,7 +74,7 @@ const result = await adoptionsCollection.insertOne(newRequest);
 res.status(201).send({success:true, insertedId: result.insertedId});
  });
 
- app.post('/pets',async(res,req)=>{
+ app.post('/pets',async(req,res)=>{
   const petData = req.body;
   const newPet = {
     ...petData,
