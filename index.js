@@ -3,8 +3,11 @@ require("dotenv").config()
 const cors = require('cors');
 const app = express();
 const port = 8000;
-app.use(cors());
 app.use(express.json());
+app.use(cors({
+  origin: 'http://localhost:3000',
+    credentials: true
+}));
 
 
 
@@ -50,7 +53,7 @@ async function server() {
 
  app.get('/pets/:id',async(req,res)=>{
   const {id}= req.params;
-  const query = {_id:id}
+  const query = {_id:new ObjectId(id)}
   const result = await petsCollection.findOne(query)
   res.send(result)
 
@@ -78,10 +81,65 @@ res.status(201).send({success:true, insertedId: result.insertedId});
   const petData = req.body;
   const newPet = {
     ...petData,
+    status:"available",
     createdAt:new Date()
   };
   const result = await petsCollection.insertOne(newPet)
   res.status(201).send({success:true, message: "Pet added successfully!", insertedId:result.insertedId});
+ })
+
+ app.get('/adoptions/pet/:petId',async(req,res)=>{
+  const petId = req.params.petId;
+  const result = await adoptionsCollection.find({petId}).toArray();
+  res.send(result);
+ })
+
+ app.patch('/adoptions/:id',async(req,res)=>{
+  const id = req.params.id;
+  const{status,petId} = req.body;
+
+  const result = await adoptionsCollection.updateOne(
+    {_id: new ObjectId(id)},
+    {$set:{status}}
+  );
+  if(status === "approved"){
+    await petsCollection.updateOne(
+      {_id:new ObjectId(petId)},
+      {$set:{status:"adopted"}}
+    );
+    await adoptionsCollection.updateMany(
+      {petId,_id:{$ne:id},status:"pending"},
+      {$set:{status:"rejected"}}
+    );
+  }
+  res.send(result);
+ })
+
+ app.get('/adoptions/user/:email',async(req,res)=>{
+  const email = req.params.email;
+  const result = await adoptionsCollection.find({userEmail:email}).toArray();
+  res.send(result);
+ })
+ app.delete('/adoptions/:id',async(req,res)=>{
+  const id = req.params.id;
+  const result=await adoptionsCollection.deleteOne({_id:new ObjectId(id)});
+  res.send(result);
+ })
+
+ app.patch('/pets/:id',async(req,res)=>{
+  const id = req.params.id;
+  const updatedData = req.body;
+  const result = await petsCollection.updateOne(
+    { _id:new ObjectId(id)},
+    {$set:updatedData}
+  );
+  res.send(result);
+ })
+
+ app.delete('/pets/:id',async(req,res)=>{
+  const id = req.params.id;
+  const result = await petsCollection.deleteOne({_id:new ObjectId(id)});
+  res.send(result);
  })
 
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
