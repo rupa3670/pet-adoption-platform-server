@@ -5,7 +5,7 @@ const app = express();
 const port = 8000;
 app.use(express.json());
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
     credentials: true
 }));
 
@@ -111,7 +111,7 @@ async function server() {
   res.status(201).send({success:true, message: "Pet added successfully!", insertedId:result.insertedId});
  })
 
- app.post('/adoptions',verifyEmail, async (req,res)=>{
+ app.post('/adoptions',verifyToken, async (req,res)=>{
   const adoptionData = req.body;
   const pet = await petsCollection.findOne({_id: new ObjectId(adoptionData.petId)});
 if (!pet){
@@ -137,7 +137,7 @@ res.status(201).send({success:true, insertedId: result.insertedId});
 
  app.get('/adoptions/pet/:petId',verifyToken,async(req,res)=>{
   const petId = req.params.petId;
-  const petId = req.params.petId;
+  const pet = await petsCollection.findOne({_id: new ObjectId(petId)});
   if(!pet){
     return res.status(404).send({message:"pet not found"});
   }
@@ -170,7 +170,7 @@ res.status(201).send({success:true, insertedId: result.insertedId});
       {$set:{status:"adopted"}}
     );
     await adoptionsCollection.updateMany(
-      {petId,_id:{$ne:id},status:"pending"},
+      {petId,_id:{$ne:new ObjectId(id)},status:"pending"},
       {$set:{status:"rejected"}}
     );
   }
