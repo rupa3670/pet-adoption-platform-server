@@ -111,7 +111,7 @@ async function server() {
   res.status(201).send({success:true, message: "Pet added successfully!", insertedId:result.insertedId});
  })
 
- app.post('/adoptions', async (req,res)=>{
+ app.post('/adoptions',verifyEmail, async (req,res)=>{
   const adoptionData = req.body;
   const pet = await petsCollection.findOne({_id: new ObjectId(adoptionData.petId)});
 if (!pet){
@@ -135,15 +135,30 @@ res.status(201).send({success:true, insertedId: result.insertedId});
 
  
 
- app.get('/adoptions/pet/:petId',async(req,res)=>{
+ app.get('/adoptions/pet/:petId',verifyToken,async(req,res)=>{
   const petId = req.params.petId;
+  const petId = req.params.petId;
+  if(!pet){
+    return res.status(404).send({message:"pet not found"});
+  }
+  if (pet.ownerEmail !== req.decoded.email){
+    return res.status(403).send({message:"forbidden access"});
+  }
   const result = await adoptionsCollection.find({petId}).toArray();
   res.send(result);
  })
 
- app.patch('/adoptions/:id',async(req,res)=>{
+ app.patch('/adoptions/:id',verifyToken,async(req,res)=>{
   const id = req.params.id;
   const{status,petId} = req.body;
+  const pet = await petsCollection.findOne({_id:new ObjectId(petId)});
+
+  if(!pet){
+    return res.status(404).send({message:"pet not found"});
+  }
+  if (pet.ownerEmail !== req.decoded.email){
+    return res.status(403).send({message:"forbidden access"});
+  }
 
   const result = await adoptionsCollection.updateOne(
     {_id: new ObjectId(id)},
@@ -162,13 +177,20 @@ res.status(201).send({success:true, insertedId: result.insertedId});
   res.send(result);
  })
 
- app.get('/adoptions/user/:email',async(req,res)=>{
+ app.get('/adoptions/user/:email',verifyToken,verifyEmail,async(req,res)=>{
   const email = req.params.email;
   const result = await adoptionsCollection.find({userEmail:email}).toArray();
   res.send(result);
  })
- app.delete('/adoptions/:id',async(req,res)=>{
+ app.delete('/adoptions/:id',verifyToken,async(req,res)=>{
   const id = req.params.id;
+  const adoption = await adoptionsCollection.findOne({_id:new ObjectId(id)});
+  if(!adoption){
+    return res.status(404).send({message:"request not found"});
+  }
+  if (adoption.userEmail !== req.decoded.email){
+    return res.status(403).send({message:"forbidden access"});
+  }
   const result=await adoptionsCollection.deleteOne({_id:new ObjectId(id)});
   res.send(result);
  })
