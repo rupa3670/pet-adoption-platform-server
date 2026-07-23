@@ -12,6 +12,7 @@ app.use(cors({
 
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const { createRemoteJWKSet } = require('jose-cjs');
 const uri = process.env.DB_URI;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -22,6 +23,22 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   }
 });
+
+const JWKS =createRemoteJWKSet(
+  new URL (`${process.env.BETTER_AUTH_URL}/api/auth/jwks`)
+);
+
+const verifyToken = async (req,res,next)=>{
+  const authHeader = req.headers.authorization;
+  if (!authHeader){
+    return res.status(401).json({message:"Unauthorized access"});
+  }
+}
+const token = authHeader.split(" ")[1];
+if(!token){
+  return res.status(401).json({message:"Unauthorized access"});
+}
+
 
 async function server() {
   try {
@@ -71,7 +88,7 @@ async function server() {
   const newRequest = {
     ...adoptionData,
     status:"pending",
-    createAt:new Date()
+    createdAt:new Date()
   };
 const result = await adoptionsCollection.insertOne(newRequest);
 res.status(201).send({success:true, insertedId: result.insertedId});
@@ -129,15 +146,17 @@ res.status(201).send({success:true, insertedId: result.insertedId});
  app.patch('/pets/:id',async(req,res)=>{
   const id = req.params.id;
   const updatedData = req.body;
-  const result = await petsCollection.updateOne(
+  const result = await petsCollection.findOneAndUpdate(
     { _id:new ObjectId(id)},
-    {$set:updatedData}
+    {$set:updatedData},
+    { returnDocument:'after'}
   );
   res.send(result);
  })
 
  app.delete('/pets/:id',async(req,res)=>{
   const id = req.params.id;
+  await adoptionsCollection.deleteMany({petId:id});
   const result = await petsCollection.deleteOne({_id:new ObjectId(id)});
   res.send(result);
  })
