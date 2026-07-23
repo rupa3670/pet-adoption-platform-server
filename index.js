@@ -12,7 +12,7 @@ app.use(cors({
 
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const { createRemoteJWKSet } = require('jose-cjs');
+const { createRemoteJWKSet, jwtVerify } = require('jose-cjs');
 const uri = process.env.DB_URI;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -33,10 +33,26 @@ const verifyToken = async (req,res,next)=>{
   if (!authHeader){
     return res.status(401).json({message:"Unauthorized access"});
   }
-}
-const token = authHeader.split(" ")[1];
+  const token = authHeader.split(" ")[1];
 if(!token){
   return res.status(401).json({message:"Unauthorized access"});
+}
+jwtVerify(token,JWKS)
+.then((result)=>{
+  req.decoded = result.payload;
+  next();
+})
+.catch((err)=>{
+  return res.status(401).json({message:"Unauthorized access"})
+});
+
+};
+
+const verifyEmail = (req,res,next)=>{
+  if (req.params.email && req.decoded.email !== req.params.email){
+    return res.status(403).json({message:"forbidden access"});
+  }
+  next();
 }
 
 
@@ -76,17 +92,40 @@ async function server() {
 
  }) 
 
- app.get('/pets/owner/:email', async(req,res)=>{
-  const email = req.params.email;
-  const query = {ownerEmail:email};
+ app.get('/pets/owner/:email', verifyToken,verifyEmail, async(req,res)=>{
+  // const email = req.params.email;
+  const query = {ownerEmail:req.params.email};
   const result = await petsCollection.find(query).toArray();
   res.send(result)
  })
 
+ app.post('/pets',verifyToken, async(req,res)=>{
+  const petData = req.body;
+  const newPet = {
+    ...petData,
+    ownerEmail:req.decoded.email,
+    status:"available",
+    createdAt:new Date()
+  };
+  const result = await petsCollection.insertOne(newPet)
+  res.status(201).send({success:true, message: "Pet added successfully!", insertedId:result.insertedId});
+ })
+
  app.post('/adoptions', async (req,res)=>{
   const adoptionData = req.body;
+  const pet = await petsCollection.findOne({_id: new ObjectId(adoptionData.petId)});
+if (!pet){
+  return res.status(404).send({ message:"pet not found"});
+}
+if( pet.ownerEmail === req.decoded.email){
+  return res.status(403).send({message:"you cannot adopt you own pet"});
+}
+if(pet.status === "adopted"){
+  return res.status(400).send({ message:"this pet is already adopted"})
+}
   const newRequest = {
     ...adoptionData,
+    userEmail:req.decoded.email,
     status:"pending",
     createdAt:new Date()
   };
@@ -94,16 +133,7 @@ const result = await adoptionsCollection.insertOne(newRequest);
 res.status(201).send({success:true, insertedId: result.insertedId});
  });
 
- app.post('/pets',async(req,res)=>{
-  const petData = req.body;
-  const newPet = {
-    ...petData,
-    status:"available",
-    createdAt:new Date()
-  };
-  const result = await petsCollection.insertOne(newPet)
-  res.status(201).send({success:true, message: "Pet added successfully!", insertedId:result.insertedId});
- })
+ 
 
  app.get('/adoptions/pet/:petId',async(req,res)=>{
   const petId = req.params.petId;
@@ -143,8 +173,15 @@ res.status(201).send({success:true, insertedId: result.insertedId});
   res.send(result);
  })
 
- app.patch('/pets/:id',async(req,res)=>{
+ app.patch('/pets/:id',verifyToken, async(req,res)=>{
   const id = req.params.id;
+  const pet= await petsCollection.findOne({_id:new ObjectId(id)});
+  if(!pet){
+    return res.status(404).send({message:"prt not found"});
+  }
+  if (pet.ownerEmail !== req.decoded.email){
+    return res.status(403).send({message:"forbidden access"});
+  }
   const updatedData = req.body;
   const result = await petsCollection.findOneAndUpdate(
     { _id:new ObjectId(id)},
@@ -154,8 +191,15 @@ res.status(201).send({success:true, insertedId: result.insertedId});
   res.send(result);
  })
 
- app.delete('/pets/:id',async(req,res)=>{
+ app.delete('/pets/:id',verifyToken,async(req,res)=>{
   const id = req.params.id;
+  const pet = await petsCollection.findOne({_id: new ObjectId(id)});
+  if(!pet){
+    return res.status(404).send({message:"prt not found"});
+  }
+  if (pet.ownerEmail !== req.decoded.email){
+    return res.status(403).send({message:"forbidden access"});
+  }
   await adoptionsCollection.deleteMany({petId:id});
   const result = await petsCollection.deleteOne({_id:new ObjectId(id)});
   res.send(result);
