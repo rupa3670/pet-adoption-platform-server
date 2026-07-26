@@ -2,7 +2,7 @@ const express = require('express');
 require("dotenv").config()
 const cors = require('cors');
 const app = express();
-const port = 8000;
+const port = process.env.PORT || 8000;
 app.use(express.json());
 app.use(cors({
   origin: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
@@ -59,7 +59,7 @@ const verifyEmail = (req,res,next)=>{
 async function server() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
 
@@ -113,6 +113,11 @@ async function server() {
 
  app.post('/adoptions',verifyToken, async (req,res)=>{
   const adoptionData = req.body;
+
+  if (!adoptionData.petId || !ObjectId.isValid(adoptionData.petId)) {
+    return res.status(400).send({ message: "invalid pet id" });
+  }
+
   const pet = await petsCollection.findOne({_id: new ObjectId(adoptionData.petId)});
 if (!pet){
   return res.status(404).send({ message:"pet not found"});
@@ -125,6 +130,7 @@ if(pet.status === "adopted"){
 }
   const newRequest = {
     ...adoptionData,
+    petId: new ObjectId(adoptionData.petId),
     userEmail:req.decoded.email,
     status:"pending",
     createdAt:new Date()
@@ -137,6 +143,11 @@ res.status(201).send({success:true, insertedId: result.insertedId});
 
  app.get('/adoptions/pet/:petId',verifyToken,async(req,res)=>{
   const petId = req.params.petId;
+
+  if (!ObjectId.isValid(petId)) {
+    return res.status(400).send({ message: "invalid pet id" });
+  }
+
   const pet = await petsCollection.findOne({_id: new ObjectId(petId)});
   if(!pet){
     return res.status(404).send({message:"pet not found"});
@@ -144,13 +155,26 @@ res.status(201).send({success:true, insertedId: result.insertedId});
   if (pet.ownerEmail !== req.decoded.email){
     return res.status(403).send({message:"forbidden access"});
   }
-  const result = await adoptionsCollection.find({petId}).toArray();
+  const result = await adoptionsCollection.find({petId: new ObjectId(petId)}).toArray();
   res.send(result);
  })
+
+ app.get('/adoptions/owner/:email', verifyToken, verifyEmail, async(req,res)=>{
+  const email = req.params.email;
+  const myPets = await petsCollection.find({ ownerEmail: email }).project({ _id: 1 }).toArray();
+  const petIds = myPets.map(p => p._id);
+  const result = await adoptionsCollection.find({ petId: { $in: petIds } }).toArray();
+  res.send(result);
+});
 
  app.patch('/adoptions/:id',verifyToken,async(req,res)=>{
   const id = req.params.id;
   const{status,petId} = req.body;
+
+  if (!ObjectId.isValid(id) || !ObjectId.isValid(petId)) {
+    return res.status(400).send({ message: "invalid id" });
+  }
+
   const pet = await petsCollection.findOne({_id:new ObjectId(petId)});
 
   if(!pet){
@@ -170,7 +194,7 @@ res.status(201).send({success:true, insertedId: result.insertedId});
       {$set:{status:"adopted"}}
     );
     await adoptionsCollection.updateMany(
-      {petId,_id:{$ne:new ObjectId(id)},status:"pending"},
+      {petId: new ObjectId(petId), _id:{$ne:new ObjectId(id)}, status:"pending"},
       {$set:{status:"rejected"}}
     );
   }
@@ -222,7 +246,7 @@ res.status(201).send({success:true, insertedId: result.insertedId});
   if (pet.ownerEmail !== req.decoded.email){
     return res.status(403).send({message:"forbidden access"});
   }
-  await adoptionsCollection.deleteMany({petId:id});
+  await adoptionsCollection.deleteMany({petId: new ObjectId(id)});
   const result = await petsCollection.deleteOne({_id:new ObjectId(id)});
   res.send(result);
  })
